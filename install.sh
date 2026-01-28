@@ -3,10 +3,10 @@
 # NexusControl Backend - Quick Install Script
 #
 # USAGE:
-#   curl -fsSL https://raw.githubusercontent.com/IDKDeadXD/NexusControl-Backend/main/install.sh | bash
+#   bash <(curl -fsSL https://raw.githubusercontent.com/IDKDeadXD/NexusControl-Backend/main/install.sh)
 #
 # Or with custom options:
-#   curl -fsSL https://raw.githubusercontent.com/IDKDeadXD/NexusControl-Backend/main/install.sh | INSTALL_DIR=/opt/nexuscontrol bash
+#   INSTALL_DIR=/opt/nexuscontrol bash <(curl -fsSL https://raw.githubusercontent.com/IDKDeadXD/NexusControl-Backend/main/install.sh)
 #
 # Environment Variables:
 #   REPO_URL    - Git repository URL (default: your repo)
@@ -32,6 +32,11 @@ DEFAULT_REPO_URL="https://github.com/IDKDeadXD/NexusControl-Backend.git"
 REPO_URL="${REPO_URL:-$DEFAULT_REPO_URL}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/nexuscontrol-backend}"
 BRANCH="${BRANCH:-main}"
+
+# Function to read input (works even when piped)
+read_input() {
+    read "$@" </dev/tty
+}
 
 clear
 echo -e "${CYAN}"
@@ -118,7 +123,8 @@ if command_exists docker; then
 else
     print_warn "Docker not installed (required for running bots)"
     echo -e "    Install: ${CYAN}curl -fsSL https://get.docker.com | sh${NC}"
-    read -p "    Continue without Docker? (y/N): " cont
+    echo -ne "    Continue without Docker? (y/N): "
+    read_input cont
     [[ ! "$cont" =~ ^[Yy]$ ]] && exit 1
 fi
 
@@ -129,7 +135,8 @@ print_step 2 "Setting up installation directory..."
 
 if [ -d "$INSTALL_DIR" ]; then
     print_warn "Directory exists: $INSTALL_DIR"
-    read -p "    Remove and reinstall? (y/N): " remove
+    echo -ne "    Remove and reinstall? (y/N): "
+    read_input remove
     if [[ "$remove" =~ ^[Yy]$ ]]; then
         rm -rf "$INSTALL_DIR"
         print_ok "Removed old installation"
@@ -155,7 +162,7 @@ cd "$INSTALL_DIR"
 # ==========================================
 print_step 3 "Installing Node.js dependencies..."
 
-npm install --omit=dev 2>/dev/null || npm install
+npm install 2>/dev/null || npm install
 print_ok "Dependencies installed"
 
 # ==========================================
@@ -164,7 +171,8 @@ print_ok "Dependencies installed"
 print_step 4 "Starting interactive setup wizard..."
 echo ""
 
-node setup.js
+# Run setup.js with stdin connected to terminal
+node setup.js </dev/tty
 
 # ==========================================
 # STEP 5: Create systemd service
