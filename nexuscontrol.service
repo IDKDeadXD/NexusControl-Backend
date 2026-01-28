@@ -1,0 +1,19 @@
+[Unit]
+Description=NexusControl Backend
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/nexuscontrol-backend
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=nexuscontrol
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

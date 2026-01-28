@@ -1,0 +1,43 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+
+# Environment files (will be passed via docker-compose)
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Bot data (mounted as volume)
+bots
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage
+.nyc_output
+
+# Misc
+*.md
+!README.md
+setup.js
+deploy.sh

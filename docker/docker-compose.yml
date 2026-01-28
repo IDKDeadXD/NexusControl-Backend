@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: botmanager_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-botmanager}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-botmanager}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-botmanager}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - botmanager_network
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: botmanager_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://${DB_USER:-botmanager}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-botmanager}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN is required}
+      DOCKER_SOCKET: /var/run/docker.sock
+      BOT_CODE_PATH: /app/bots
+    ports:
+      - "${API_PORT:-3001}:3001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - bot_code:/app/bots
+    networks:
+      - botmanager_network
+      - bot_network
+
+networks:
+  botmanager_network:
+    driver: bridge
+  bot_network:
+    driver: bridge
+    name: bot_network
+
+volumes:
+  postgres_data:
+  bot_code:

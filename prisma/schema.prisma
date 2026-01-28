@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id                 String         @id @default(cuid())
+  username           String         @unique @default("admin")
+  passwordHash       String
+  mustChangePassword Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  lastLoginAt        DateTime?
+  refreshTokens      RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  adminId   String
+  admin     Admin     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+}
+
+model Bot {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  containerId   String? // Docker container ID when running
+  containerName String    @unique
+  status        BotStatus @default(STOPPED)
+  autoRestart   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastStartedAt DateTime?
+  lastStoppedAt DateTime?
+
+  // Resource limits
+  memoryLimit Int @default(512) // MB
+  cpuLimit    Float @default(1.0) // CPU cores (can be fractional like 0.5)
+
+  // Bot code configuration
+  codeDirectory String
+  entryFile     String     @default("index.js")
+  runtime       BotRuntime @default(NODEJS)
+  startCommand  String?    // Optional custom start command
+
+  logs          BotLog[]
+  envVars       BotEnvVar[]
+  statusHistory BotStatusHistory[]
+}
+
+model BotEnvVar {
+  id    String @id @default(cuid())
+  botId String
+  bot   Bot    @relation(fields: [botId], references: [id], onDelete: Cascade)
+  key   String
+  value String // Encrypted
+
+  @@unique([botId, key])
+}
+
+model BotLog {
+  id        String   @id @default(cuid())
+  botId     String
+  bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  level     LogLevel @default(INFO)
+  message   String
+  timestamp DateTime @default(now())
+
+  @@index([botId, timestamp])
+}
+
+model BotStatusHistory {
+  id          String    @id @default(cuid())
+  botId       String
+  bot         Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  status      BotStatus
+  timestamp   DateTime  @default(now())
+  cpuUsage    Float? // Percentage
+  memoryUsage Float? // MB
+
+  @@index([botId, timestamp])
+}
+
+enum BotStatus {
+  STOPPED
+  STARTING
+  RUNNING
+  STOPPING
+  ERROR
+  RESTARTING
+}
+
+enum BotRuntime {
+  NODEJS
+  PYTHON
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+// Webhook configuration for notifications
+model Webhook {
+  id        String        @id @default(cuid())
+  name      String
+  url       String
+  enabled   Boolean       @default(true)
+  events    WebhookEvent[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // Optional: filter to specific bots (empty = all bots)
+  botIds    String[]      @default([])
+}
+
+model WebhookEvent {
+  id        String      @id @default(cuid())
+  webhookId String
+  webhook   Webhook     @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  event     EventType
+
+  @@unique([webhookId, event])
+}
+
+enum EventType {
+  BOT_STARTED
+  BOT_STOPPED
+  BOT_CRASHED
+  BOT_ERROR
+  BOT_RESTARTED
+  BOT_CREATED
+  BOT_DELETED
+}
+
+// Settings/Configuration
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+// Audit Log for security tracking
+model AuditLog {
+  id          String      @id @default(cuid())
+  action      AuditAction
+  userId      String?
+  username    String?
+  ip          String?
+  userAgent   String?
+  resourceType String?
+  resourceId  String?
+  resourceName String?
+  details     Json?
+  success     Boolean     @default(true)
+  timestamp   DateTime    @default(now())
+
+  @@index([action, timestamp])
+  @@index([userId, timestamp])
+  @@index([ip, timestamp])
+}
+
+enum AuditAction {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  PASSWORD_CHANGED
+  BOT_CREATED
+  BOT_DELETED
+  BOT_STARTED
+  BOT_STOPPED
+  BOT_RESTARTED
+  BOT_UPDATED
+  FILE_UPLOADED
+  FILE_DELETED
+  FILE_MODIFIED
+  WEBHOOK_CREATED
+  WEBHOOK_DELETED
+  SUSPICIOUS_ACTIVITY
+}
