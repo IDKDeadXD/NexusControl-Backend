@@ -1,4 +1,5 @@
-import simpleGit, { SimpleGit } from 'simple-git';
+import simpleGitModule, { SimpleGit } from 'simple-git';
+const simpleGit = (simpleGitModule as unknown as { default: typeof simpleGitModule }).default || simpleGitModule;
 import fs from 'fs/promises';
 import path from 'path';
 import { logger } from '../../utils/logger.js';

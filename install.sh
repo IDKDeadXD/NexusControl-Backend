@@ -338,11 +338,11 @@ async function createAdmin() {
   if (existing) {
     await prisma.admin.update({
       where: { username: '$ADMIN_USER' },
-      data: { password: hashedPassword, mustChangePassword: false }
+      data: { passwordHash: hashedPassword, mustChangePassword: false }
     });
   } else {
     await prisma.admin.create({
-      data: { username: '$ADMIN_USER', password: hashedPassword, mustChangePassword: false }
+      data: { username: '$ADMIN_USER', passwordHash: hashedPassword, mustChangePassword: false }
     });
   }
 
@@ -389,6 +389,13 @@ EOF
 run_sudo systemctl daemon-reload
 run_sudo systemctl enable nexuscontrol
 print_ok "Systemd service created and enabled"
+
+# Open firewall port
+if command_exists ufw; then
+    echo -e "  Opening firewall port $BACKEND_PORT..."
+    run_sudo ufw allow "$BACKEND_PORT/tcp" >/dev/null 2>&1 || true
+    print_ok "Firewall port $BACKEND_PORT opened"
+fi
 
 # ==========================================
 # STEP 7: Complete
