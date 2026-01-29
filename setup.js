@@ -189,25 +189,13 @@ async function main() {
 
     if (!envContent) {
       // Database URL
-      console.log('\n── Database Configuration ──');
-      const dbType = await question('Database type (sqlite/postgresql) [sqlite]: ');
-      let databaseUrl;
-
-      if (dbType.toLowerCase() === 'postgresql' || dbType.toLowerCase() === 'postgres') {
-        const dbHost = await question('PostgreSQL host [localhost]: ') || 'localhost';
-        const dbPort = await question('PostgreSQL port [5432]: ') || '5432';
-        const dbName = await question('Database name [nexuscontrol]: ') || 'nexuscontrol';
-        const dbUser = await question('Database user [postgres]: ') || 'postgres';
-        const dbPass = await questionHidden('Database password: ');
-        databaseUrl = `postgresql://${dbUser}:${dbPass}@${dbHost}:${dbPort}/${dbName}`;
-      } else {
-        databaseUrl = 'file:./data/nexuscontrol.db';
-        // Create data directory for SQLite
-        const dataDir = join(__dirname, 'data');
-        if (!existsSync(dataDir)) {
-          mkdirSync(dataDir, { recursive: true });
-        }
-      }
+      console.log('\n── Database Configuration (PostgreSQL) ──');
+      const dbHost = await question('PostgreSQL host [localhost]: ') || 'localhost';
+      const dbPort = await question('PostgreSQL port [5432]: ') || '5432';
+      const dbName = await question('Database name [nexuscontrol]: ') || 'nexuscontrol';
+      const dbUser = await question('Database user [postgres]: ') || 'postgres';
+      const dbPass = await questionHidden('Database password: ');
+      const databaseUrl = `postgresql://${dbUser}:${dbPass}@${dbHost}:${dbPort}/${dbName}`;
 
       // Server configuration
       console.log('\n── Server Configuration ──');
