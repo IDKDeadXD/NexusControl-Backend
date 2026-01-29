@@ -2,17 +2,28 @@
 
 import { execSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
-import { existsSync, writeFileSync, readFileSync, mkdirSync } from 'fs';
+import { existsSync, writeFileSync, readFileSync, mkdirSync, openSync, closeSync } from 'fs';
 import { randomBytes } from 'crypto';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const rl = createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
+// Create readline interface that reads from /dev/tty for interactive input
+let rl;
+try {
+  const ttyFd = openSync('/dev/tty', 'r');
+  rl = createInterface({
+    input: process.stdin.isTTY ? process.stdin : require('fs').createReadStream(null, { fd: ttyFd }),
+    output: process.stdout,
+  });
+} catch {
+  // Fallback for Windows or if /dev/tty is not available
+  rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+}
 
 function question(prompt) {
   return new Promise((resolve) => {
@@ -23,6 +34,16 @@ function question(prompt) {
 function questionHidden(prompt) {
   return new Promise((resolve) => {
     process.stdout.write(prompt);
+
+    // Check if we can use raw mode
+    if (!process.stdin.isTTY) {
+      // Fallback: just read normally (password will be visible)
+      rl.question('', (answer) => {
+        resolve(answer);
+      });
+      return;
+    }
+
     const stdin = process.stdin;
     stdin.setRawMode(true);
     stdin.resume();
@@ -64,10 +85,45 @@ function generateSecret(length = 64) {
   return randomBytes(length).toString('hex');
 }
 
+function checkDocker() {
+  // Try multiple methods to detect Docker
+  const checks = [
+    'docker info',
+    'docker ps',
+    'systemctl is-active docker',
+    'service docker status',
+  ];
+
+  for (const cmd of checks) {
+    try {
+      execSync(cmd, { stdio: 'pipe', timeout: 5000 });
+      return true;
+    } catch {
+      continue;
+    }
+  }
+
+  // Check if docker socket exists
+  if (existsSync('/var/run/docker.sock')) {
+    return true;
+  }
+
+  return false;
+}
+
+function isDockerInstalled() {
+  try {
+    execSync('which docker || where docker', { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║         Discord Bot Manager - Setup Wizard                ║
+║            NexusControl - Setup Wizard                    ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 `);
@@ -86,25 +142,37 @@ async function main() {
 
     // Step 2: Check Docker
     console.log('▶ Checking Docker...');
-    try {
-      execSync('docker info', { stdio: 'pipe' });
-      console.log('✔ Docker is running\n');
-    } catch {
-      console.error('✖ Docker is not running or not installed.');
-      console.error('  Please install Docker and start the Docker daemon.\n');
-      const continueAnyway = await question('Continue anyway? (y/N): ');
-      if (continueAnyway.toLowerCase() !== 'y') {
+    const dockerInstalled = isDockerInstalled();
+    const dockerRunning = checkDocker();
+
+    if (dockerRunning) {
+      console.log('✔ Docker is installed and running\n');
+    } else if (dockerInstalled) {
+      console.log('⚠ Docker is installed but may not be running.');
+      console.log('  Try: sudo systemctl start docker\n');
+      const continueAnyway = await question('Continue anyway? (Y/n): ');
+      if (continueAnyway.toLowerCase() === 'n') {
+        process.exit(1);
+      }
+    } else {
+      console.log('⚠ Docker is not installed.');
+      console.log('  Install: curl -fsSL https://get.docker.com | sh\n');
+      const continueAnyway = await question('Continue anyway? (Y/n): ');
+      if (continueAnyway.toLowerCase() === 'n') {
         process.exit(1);
       }
     }
 
-    // Step 3: Install dependencies
-    console.log('▶ Installing dependencies...');
-    if (!exec('npm install')) {
-      console.error('✖ Failed to install dependencies');
-      process.exit(1);
+    // Step 3: Install dependencies (skip if already done by install.sh)
+    const nodeModulesExists = existsSync(join(__dirname, 'node_modules'));
+    if (!nodeModulesExists) {
+      console.log('▶ Installing dependencies...');
+      if (!exec('npm install')) {
+        console.error('✖ Failed to install dependencies');
+        process.exit(1);
+      }
+      console.log('✔ Dependencies installed\n');
     }
-    console.log('✔ Dependencies installed\n');
 
     // Step 4: Setup environment variables
     console.log('▶ Setting up environment...\n');
@@ -128,12 +196,12 @@ async function main() {
       if (dbType.toLowerCase() === 'postgresql' || dbType.toLowerCase() === 'postgres') {
         const dbHost = await question('PostgreSQL host [localhost]: ') || 'localhost';
         const dbPort = await question('PostgreSQL port [5432]: ') || '5432';
-        const dbName = await question('Database name [botmanager]: ') || 'botmanager';
+        const dbName = await question('Database name [nexuscontrol]: ') || 'nexuscontrol';
         const dbUser = await question('Database user [postgres]: ') || 'postgres';
         const dbPass = await questionHidden('Database password: ');
         databaseUrl = `postgresql://${dbUser}:${dbPass}@${dbHost}:${dbPort}/${dbName}`;
       } else {
-        databaseUrl = 'file:./data/botmanager.db';
+        databaseUrl = 'file:./data/nexuscontrol.db';
         // Create data directory for SQLite
         const dataDir = join(__dirname, 'data');
         if (!existsSync(dataDir)) {
@@ -158,14 +226,14 @@ async function main() {
       const botsDir = await question('Bots storage directory [./bots]: ') || './bots';
 
       // Create bots directory
-      const botsPath = join(__dirname, botsDir);
+      const botsPath = join(__dirname, botsDir.startsWith('./') ? botsDir.slice(2) : botsDir);
       if (!existsSync(botsPath)) {
         mkdirSync(botsPath, { recursive: true });
         console.log(`✔ Created bots directory: ${botsPath}`);
       }
 
       // Build .env content
-      envContent = `# Discord Bot Manager - Environment Configuration
+      envContent = `# NexusControl - Environment Configuration
 # Generated by setup wizard
 
 # Environment
@@ -235,6 +303,10 @@ BOTS_DIRECTORY=${botsDir}
     // Create admin user via Prisma
     console.log('\nCreating admin account...');
 
+    // Escape special characters in password for the script
+    const escapedPassword = password.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+    const escapedUsername = username.replace(/'/g, "\\'");
+
     // We need to hash the password and create the user
     const createAdminScript = `
 import { PrismaClient } from '@prisma/client';
@@ -243,15 +315,15 @@ import bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function createAdmin() {
-  const hashedPassword = await bcrypt.hash('${password}', 12);
+  const hashedPassword = await bcrypt.hash('${escapedPassword}', 12);
 
   const existing = await prisma.admin.findUnique({
-    where: { username: '${username}' }
+    where: { username: '${escapedUsername}' }
   });
 
   if (existing) {
     await prisma.admin.update({
-      where: { username: '${username}' },
+      where: { username: '${escapedUsername}' },
       data: {
         password: hashedPassword,
         mustChangePassword: false
@@ -261,7 +333,7 @@ async function createAdmin() {
   } else {
     await prisma.admin.create({
       data: {
-        username: '${username}',
+        username: '${escapedUsername}',
         password: hashedPassword,
         mustChangePassword: false
       }
