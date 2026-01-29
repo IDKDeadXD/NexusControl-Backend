@@ -1,8 +1,10 @@
 import pino from 'pino';
-const pinoLogger = (pino as unknown as typeof pino.default).default || pino;
 import { config } from '../config/index.js';
 
-export const logger = pinoLogger({
+// @ts-ignore - ESM/CJS interop
+const pinoFn = typeof pino === 'function' ? pino : (pino as any).default;
+
+export const logger = pinoFn({
   level: config.NODE_ENV === 'development' ? 'debug' : 'info',
   transport:
     config.NODE_ENV === 'development'

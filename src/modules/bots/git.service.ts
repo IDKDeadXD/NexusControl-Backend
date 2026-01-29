@@ -1,8 +1,10 @@
-import simpleGitModule, { SimpleGit } from 'simple-git';
-const simpleGit = (simpleGitModule as unknown as { default: typeof simpleGitModule }).default || simpleGitModule;
+import simpleGitImport, { SimpleGit } from 'simple-git';
 import fs from 'fs/promises';
 import path from 'path';
 import { logger } from '../../utils/logger.js';
+
+// @ts-ignore - ESM/CJS interop
+const simpleGit = typeof simpleGitImport === 'function' ? simpleGitImport : (simpleGitImport as any).default;
 
 export async function cloneRepository(
   repoUrl: string,
